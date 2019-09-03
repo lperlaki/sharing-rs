@@ -7,7 +7,7 @@ use crate::{
 use gf::{Field, GF};
 use rand::Rng;
 use std::cell::RefCell;
-use stream_cipher::{generic_array::GenericArray, NewStreamCipher, StreamCipher};
+use stream_cipher::{NewStreamCipher, StreamCipher};
 
 /// # Shamir Secret Sharing
 ///
@@ -140,11 +140,7 @@ impl<R: Rng, C: StreamCipher + NewStreamCipher> Sharing for KrawczykSecretSharin
             self.rng.borrow_mut().fill(&mut rand[..]);
             rand
         };
-
-        let mut cipher = C::new(
-            GenericArray::from_slice(&key_nonce[0..32]),
-            GenericArray::from_slice(&key_nonce[32..44]),
-        );
+        let mut cipher = C::new_var(&key_nonce[0..32], &key_nonce[32..44]).expect("Use ChaCha20 Stream Cipher");
         let mut data = data;
         cipher.encrypt(&mut data);
         let shares = self.rabin.share(data)?;
@@ -188,10 +184,7 @@ impl<R: Rng, C: StreamCipher + NewStreamCipher> Sharing for KrawczykSecretSharin
             .unzip();
         let key_nonce = self.shamir.recontruct(shamir_shares)?;
         let mut data = self.rabin.recontruct(rabin_shares)?;
-        let mut cypher = C::new(
-            GenericArray::from_slice(&key_nonce[0..32]),
-            GenericArray::from_slice(&key_nonce[32..44]),
-        );
+        let mut cypher = C::new_var(&key_nonce[0..32], &key_nonce[32..44]).expect("Use ChaCha20 Stream Cipher");
         cypher.decrypt(&mut data);
         Some(data)
     }

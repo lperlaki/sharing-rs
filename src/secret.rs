@@ -8,6 +8,7 @@ use gf::{Field, GF};
 use rand::Rng;
 use std::cell::RefCell;
 use stream_cipher::{NewStreamCipher, StreamCipher};
+use std::io::{Read, self};
 
 /// # Shamir Secret Sharing
 ///
@@ -32,6 +33,9 @@ pub struct ShamirSecretSharing<R: Rng> {
 
 impl<R: Rng> ShamirSecretSharing<R> {
     pub fn new(n: u8, k: u8, rng: R) -> Self {
+        if k < 1 || k > n {
+            panic!("n musst be bigger then k")
+        }
         Self {
             n,
             k,
@@ -42,33 +46,25 @@ impl<R: Rng> ShamirSecretSharing<R> {
 
 impl<R: Rng> Sharing for ShamirSecretSharing<R> {
     type Share = ShamirShare;
-    fn share(&self, data: Vec<u8>) -> Option<Vec<Self::Share>> {
-        if self.k < 1 || self.k > self.n {
-            return None;
-        }
+    fn share(&self, data: &mut impl Read) -> io::Result<Vec<Self::Share>> {
 
         let mut rand = vec![0u8; self.k as usize];
-        let mut out: Vec<ShamirShare> = ShareVec::with_size(self.n as usize, data.len());
+        Ok(data.bytes().filter_map(|b| b.ok()).map(|byte| {
 
-        for i in 0..data.len() {
-            rand[0] = data[i];
+            rand[0] = byte;
+
             self.rng.borrow_mut().fill(&mut rand[1..]);
-
-            for x in 0..self.n {
-                if i == 0 {
-                    out[x as usize].id = x + 1
-                }
-
-                out[x as usize].body[i] = rand
+            (1..=self.n).map(|x| rand
                     .iter()
                     .enumerate()
-                    .map(|(j, r)| (GF(x + 1).pow(j) * GF(*r)))
-                    .sum::<GF<u8>>()
-                    .into()
+                    .map(|(j, r)| (GF(x).pow(j) * GF(*r)))
+                    .sum::<GF<u8>>().into())
+        }).enumerate().fold(ShareVec::with_size(self.n as usize, 0), |shares, (j, bytes)| { 
+            for (i, b) in bytes.enumerate() {
+                shares[j].body[i] = b
             }
-        }
-
-        Some(out)
+            shares
+        }))
     }
 
     fn recontruct(&self, shares: Vec<Self::Share>) -> Option<Vec<u8>> {
@@ -133,21 +129,23 @@ impl<R: Rng + Clone, C: StreamCipher + NewStreamCipher> KrawczykSecretSharing<C,
 
 impl<R: Rng, C: StreamCipher + NewStreamCipher> Sharing for KrawczykSecretSharing<C, R> {
     type Share = KrawczykShare;
-    fn share(&self, data: Vec<u8>) -> Option<Vec<Self::Share>> {
-        let length = data.len();
+    fn share(&self, data: &mut impl Read) -> io::Result<Vec<Self::Share>> {
+        let mut buf = Vec::new();
+        data.read_to_end(&mut buf);
+        let length = buf.len();
         let key_nonce = {
             let mut rand = [0u8; 44];
             self.rng.borrow_mut().fill(&mut rand[..]);
             rand
         };
         let mut cipher = C::new_var(&key_nonce[0..32], &key_nonce[32..44]).expect("Use ChaCha20 Stream Cipher");
-        let mut data = data;
-        cipher.encrypt(&mut data);
-        let shares = self.rabin.share(data)?;
+        
+        cipher.encrypt(&mut buf);
+        let shares = self.rabin.share(&mut buf[..])?;
 
-        let key_nonce_shares = self.shamir.share(key_nonce.to_vec())?;
+        let key_nonce_shares = self.shamir.share(&mut key_nonce[..])?;
 
-        Some(
+        Ok(
             shares
                 .into_iter()
                 .zip(key_nonce_shares)

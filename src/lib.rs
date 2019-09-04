@@ -14,6 +14,9 @@
 //! assert_eq!(data, rec);
 //! ```
 
+
+use std::io::{Read, self};
+
 pub mod ids;
 pub mod secret;
 
@@ -28,7 +31,7 @@ pub use crate::{
 pub trait Sharing {
     type Share: Share;
 
-    fn share(&self, data: Vec<u8>) -> Option<Vec<Self::Share>>;
+    fn share(&self, data: &mut impl Read) -> io::Result<Vec<Self::Share>>;
 
     fn recontruct(&self, shares: Vec<Self::Share>) -> Option<Vec<u8>>;
 

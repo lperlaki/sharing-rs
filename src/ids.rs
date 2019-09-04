@@ -4,6 +4,7 @@ use crate::{
     Sharing,
 };
 use gf::{Field, GF};
+use std::io::{Read, self};
 
 
 /// # Rabin Information Dispersal
@@ -34,16 +35,18 @@ impl RabinInformationDispersal {
 
 impl Sharing for RabinInformationDispersal {
     type Share = RabinShare;
-    fn share(&self, data: Vec<u8>) -> Option<Vec<Self::Share>> {
-        let length = data.len();
-        Some(
+    fn share(&self, data: &mut impl Read) -> io::Result<Vec<Self::Share>> {
+        let buf = Vec::new();
+        data.read_to_end(&mut buf);
+        let length = buf.len();
+        Ok(
             (1..=self.n)
                 .map(|x| {
                     let gx = GF(x);
                     RabinShare {
                         id: x,
                         length,
-                        body: data
+                        body: buf
                             .chunks(self.k as usize)
                             .map(|chunk| {
                                 chunk
@@ -104,9 +107,6 @@ fn inverse(matrix: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
     let mut tmp = matrix.clone();
 
     for i in 0..size {
-        // if tmp[i][i] == 0 && !find_and_swap_nonzero_in_row(i, size, &mut tmp, &mut res) {
-        //   size = size - 1;
-        // }
 
         let inv = GF(tmp[i][i]).inverse().into();
         normalize_row(&mut tmp[i][..], &mut res[i][..], inv);
@@ -126,10 +126,7 @@ fn inverse(matrix: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
             mult_and_subtract(&mut resj[..], &mut resi[..], coeff);
         }
     }
-
-    // we could assert here that tmp is now an identity matrix
-
-    return res;
+    res
 }
 
 fn mult_and_subtract(row: &mut [u8], normalized: &[u8], coeff: u8) {
@@ -144,26 +141,6 @@ fn normalize_row(tmp_row: &mut [u8], res_row: &mut [u8], element: u8) {
         res_row[i] = (GF(res_row[i]) * GF(element)).into();
     }
 }
-
-// fn find_and_swap_nonzero_in_row(
-//     i: usize,
-//     num_rows: usize,
-//     tmp: &mut Vec<Vec<u8>>,
-//     res: &mut Vec<Vec<u8>>,
-// ) -> bool {
-//     for j in i + 1..num_rows {
-//         if tmp[j][i] != 0 {
-//             swap_rows(tmp, i, j);
-//             swap_rows(res, i, j);
-//             return true;
-//         }
-//     }
-//     false
-// }
-
-// fn swap_rows(matrix: &mut Vec<Vec<u8>>, first: usize, second: usize) {
-//     matrix.swap(first, second);
-// }
 
 fn generate_identity(size: usize) -> Vec<Vec<u8>> {
     (0..size)

@@ -23,6 +23,7 @@ pub mod secret;
 mod share;
 use share::Share;
 
+#[doc(inline)]
 pub use crate::{
     ids::RabinInformationDispersal,
     secret::{KrawczykSecretSharing, ShamirSecretSharing},

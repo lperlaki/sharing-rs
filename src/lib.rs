@@ -13,9 +13,9 @@
 //!
 //! assert_eq!(data, rec);
 //! ```
-
 pub mod ids;
 pub mod secret;
+pub mod secret_iter;
 
 mod share;
 use share::Share;
@@ -24,6 +24,7 @@ use share::Share;
 pub use crate::{
     ids::RabinInformationDispersal,
     secret::{KrawczykSecretSharing, ShamirSecretSharing},
+    secret_iter::ShamirIterSecretSharing,
 };
 
 pub trait Sharing {
@@ -39,4 +40,29 @@ pub trait Sharing {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_iter() {
+        let sharer1 = ShamirSecretSharing::new(3, 2, rand::thread_rng());
+
+        let sharer2 = ShamirIterSecretSharing::new(3, 2, rand::thread_rng());
+
+        let shares1 = sharer1.share([1, 2, 3, 4, 5].to_vec()).unwrap();
+
+        let shares2: Vec<_> = sharer2
+            .share([1, 2, 3, 4, 5].iter())
+            .unwrap()
+            .into_iter()
+            .map(|i| share::ShamirShare {
+                id: i.x,
+                body: i.collect(),
+            })
+            .collect();
+        assert_eq!(
+            sharer1.recontruct(shares1[1..=2].to_vec()),
+            sharer1.recontruct(shares2[1..=2].to_vec())
+        );
+    }
+}

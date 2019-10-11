@@ -42,8 +42,7 @@ impl<'a, I: Iterator<Item = &'a u8>, R: Rng + Clone> Iterator for ShareIter<'a, 
     fn next(&mut self) -> Option<Self::Item> {
         let x = GF(self.x);
         self.source.next().map(|v| {
-            vec![*v]
-                .into_iter()
+            std::iter::once(*v)
                 .chain(self.rng.by_ref().take(self.k as usize - 1))
                 .enumerate()
                 .map(|(j, r)| (x.pow(j) * GF(r)))
